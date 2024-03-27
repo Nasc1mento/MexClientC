@@ -1,0 +1,39 @@
+menu "Application Configuration"
+
+    config WIFI_SSID
+        string "WiFi SSID"
+        default "Fabi_MauricioWeb"
+        help
+            SSID (network name) for the Application
+
+    config WIFI_PASSWORD
+        string "WiFi Password"
+        default "19602019"
+        help
+            WiFi password (WPA or WPA2) for the Application
+
+    config MAXIMUM_RETRY
+        int "Maximum retry"
+        default 5
+        help
+            Set the Maximum retry to avoid station reconnecting to the AP unlimited when the AP is really inexistent.
+        
+    config BROKER_HOST
+        string "Broker Host"
+        default "192.168.0.111"
+        help
+            Broker Host Address IPV4 for the Application
+    
+    config BROKER_PORT
+        int "Broker Port"
+        default 8889
+        help
+            Broker Port for the Application
+
+    config THING_ID
+        int "Thing ID"
+        default 1
+        help
+            Device's ID
+      
+endmenu
