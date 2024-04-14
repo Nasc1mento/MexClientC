@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "humilddleware.h": "c",
+        "client.h": "c",
+        "system_error": "cpp",
+        "string": "cpp"
+    }
+}

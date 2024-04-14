@@ -2,13 +2,13 @@ menu "Application Configuration"
 
     config WIFI_SSID
         string "WiFi SSID"
-        default "Fabi_MauricioWeb"
+        default ""
         help
             SSID (network name) for the Application
 
     config WIFI_PASSWORD
         string "WiFi Password"
-        default "19602019"
+        default ""
         help
             WiFi password (WPA or WPA2) for the Application
 
@@ -26,7 +26,7 @@ menu "Application Configuration"
     
     config BROKER_PORT
         int "Broker Port"
-        default 8889
+        default 60000
         help
             Broker Port for the Application
 
