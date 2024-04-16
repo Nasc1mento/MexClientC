@@ -13,7 +13,7 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
-#include "mex_client.h"
+#include "proxy.h"
 #include "power_save.h"
 
 #define WIFI_TASK_0_BIT                ( 1 << 0 )
@@ -32,7 +32,10 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
 
+#define PUB_SUCCESS        BIT2
+
 static EventGroupHandle_t xEventBits;
+struct mex_client mc;
 
 static const char *TAG = "application using mex";
 
@@ -61,7 +64,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
-void wifi_init_sta(void)
+void wifi_init_sta(void *pv)
 {
     xEventBits = xEventGroupCreate();
 
@@ -111,35 +114,43 @@ void wifi_init_sta(void)
 
     ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler));
     ESP_ERROR_CHECK(esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler));
-    vEventGroupDelete(xEventBits);
+    // vEventGroupDelete(xEventBits);
+
 }
 
-void mex_task(void) {
-    struct mex_client mc;
+void mex_task(void *pv) {
+
     
-    do {
-        mc = mex_connect(APP_BROKER_HOST, 60000);
-        vTaskDelay(100 / portTICK_RATE_MS);
-    } while (mc.st != CONNECTED);
+    static int ret = -1;
 
-    while (1) {
-        ESP_LOGE(TAG, "Tentando enviar");
-        mex_publish(&mc, "topico", "mensagem");
-        vTaskDelay(1000 / portTICK_RATE_MS);
-    }
+    mc = mex_connect(APP_BROKER_HOST, 60000);
+    publish(&mc, "test", "hello world");
+    
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    xEventGroupSetBits(xEventBits, PUB_SUCCESS);
+    
 }
-
 
 void sleep_task(void *pv) {
-    deep_sleep();
+   
+    EventBits_t bits = xEventGroupWaitBits(xEventBits,
+            PUB_SUCCESS,
+            pdFALSE,
+            pdFALSE,
+            portMAX_DELAY);
+
+    if (bits & PUB_SUCCESS) {
+        esp_deep_sleep_set_rf_option(2);
+	    esp_deep_sleep(5*1000000);	
+    }
 }
 
 
 void app_main()
 {
     ESP_ERROR_CHECK(nvs_flash_init());
-
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
-    wifi_init_sta();
-    mex_task(); 
+    wifi_init_sta(NULL);
+    mex_task(NULL);
+    sleep_task(NULL);
 }

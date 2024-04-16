@@ -2,9 +2,8 @@
 #define POWER_SAVE_H
 
 #include "esp_sleep.h"
-void deep_sleep() {
-    esp_deep_sleep_set_rf_option(2);
-	esp_deep_sleep(10*1000000);	
+void deep_sleep(uint8_t seconds) {
+    
 }
 
 #endif // POWER_SAVE

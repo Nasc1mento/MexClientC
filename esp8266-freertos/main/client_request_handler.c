@@ -1,4 +1,4 @@
-#include "mex_client.h"
+#include "client_request_handler.h"
 
 struct mex_client mex_connect(char* mex_broker_ip, unsigned short int mex_broker_port) {
     char addr_str[128];
@@ -41,7 +41,7 @@ uint8_t mex_send(uint8_t sock_fd, const char* payload, size_t size) {
 
     int b;
 
-    b = send(sock_fd, size_str, SIZE_STR, 0);
+    b = send(sock_fd, size_str, 10, 0);
     if (b <= 0) {
         close(sock_fd);
         return SEND_ERROR;
@@ -68,37 +68,4 @@ uint8_t mex_recv(uint8_t sock_fd, char* buffer, size_t len) {
 
     buffer[b] = '\0';
     return MEX_OK;
-}
-
-
-uint8_t mex_publish(const struct mex_client *mc, const char *topic, const char *message) {
-    char operation[OPERATION_SIZE] = "Publish";
-    const size_t buffer_size = strlen(message) + strlen(topic) + OPERATION_SIZE + LITERAL_STRING_SIZE;
-
-    char payload[buffer_size];   
-    int b = snprintf(payload, buffer_size, 
-    "OP:'%s'\nTHING_ID:'%d'\nTOPICS:['%s']\n%s\n", 
-    operation, THING_ID, topic, message);
-
-    if (b > 0 && b < BUFFER_SIZE) {
-        return mex_send(mc->sock_fd, payload, BUFFER_SIZE);
-    } 
-
-    return -1;
-}
-
-uint8_t mex_subscribe(const struct mex_client *mc, const char *t) {
-    const char op[OPERATION_SIZE] = "Subscribe";
-
-    char i[BUFFER_SIZE];
-    
-    int b = snprintf(i, BUFFER_SIZE,
-    "OP:'%s'\nTHING_ID:'%d'\nTOPICS:['%s']\n%s\n",
-    op, THING_ID, t, "");
-
-    if (b > 0 && b < BUFFER_SIZE) {
-        return mex_send(mc->sock_fd, i, BUFFER_SIZE);
-    } 
-
-    return -1;
 }
