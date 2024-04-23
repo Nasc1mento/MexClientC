@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "esp_sleep.h": "c"
+        "esp_sleep.h": "c",
+        "socket.h": "c"
     }
 }

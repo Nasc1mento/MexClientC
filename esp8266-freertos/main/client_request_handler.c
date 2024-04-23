@@ -9,6 +9,7 @@ struct mex_client mex_connect(char* mex_broker_ip, unsigned short int mex_broker
 
     broker_info.sin_addr.s_addr = inet_addr(mex_broker_ip);
     broker_info.sin_family = AF_INET;
+
     broker_info.sin_port = htons(mex_broker_port);
     inet_ntoa_r(broker_info.sin_addr, addr_str, sizeof(addr_str) - 1);
 
@@ -39,19 +40,12 @@ uint8_t mex_send(uint8_t sock_fd, const char* payload, size_t size) {
         size_str[0] = '0';
     }
 
-    int b;
 
-    b = send(sock_fd, size_str, 10, 0);
-    if (b <= 0) {
-        close(sock_fd);
-        return SEND_ERROR;
-    }
+    send(sock_fd, size_str, 10, 0);
 
-    b = send(sock_fd, payload, size, 0);
-    if (b <= 0) {
-        close(sock_fd);
-        return SEND_ERROR;
-    }
+
+    send(sock_fd, payload, size, 0);
+    
 
     return MEX_OK;
 }

@@ -10,11 +10,20 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#include "sys/socket.h"
+
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
+#include "esp_sntp.h"
+
 #include "proxy.h"
 #include "power_save.h"
+
+#define SNTP_SERVERS 	"0.pool.ntp.org", "1.pool.ntp.org", \
+						"2.pool.ntp.org", "3.pool.ntp.org"
+
+// #include 
 
 #define WIFI_TASK_0_BIT                ( 1 << 0 )
 #define MEX_TASK_1_BIT                 ( 1 << 1 )
@@ -105,6 +114,7 @@ void wifi_init_sta(void *pv)
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "connected to ap SSID:%s password:%s",
                  APP_WIFI_SSID, APP_WIFI_PASS);
+                 
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
                  APP_WIFI_SSID, APP_WIFI_PASS);
@@ -118,18 +128,6 @@ void wifi_init_sta(void *pv)
 
 }
 
-void mex_task(void *pv) {
-
-    
-    static int ret = -1;
-
-    mc = mex_connect(APP_BROKER_HOST, 60000);
-    publish(&mc, "test", "hello world");
-    
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    xEventGroupSetBits(xEventBits, PUB_SUCCESS);
-    
-}
 
 void sleep_task(void *pv) {
    
@@ -146,11 +144,46 @@ void sleep_task(void *pv) {
 }
 
 
+
+void mex_task(void *pv) {
+
+    sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    sntp_setservername(0, "a.st1.ntp.br");
+    sntp_init();
+    
+    while (1) {
+        time_t current_time;
+        struct tm local_time;
+        char datetime_str[20];
+
+        time(&current_time);
+        localtime_r(&current_time, &local_time);
+
+        strftime(datetime_str, sizeof(datetime_str), "%Y-%m-%dT%H:%M:%SZ", &local_time);
+
+        const char msg_template[] = "{'distance': 83, 'battery': 37, 'timestamp': '%s'}";
+        char msg[sizeof(msg_template) + sizeof(datetime_str)];
+        sprintf(msg, msg_template, datetime_str);
+
+        publish(&mc, "water-level", msg);
+
+        vTaskDelay(3000 / portTICK_PERIOD_MS);
+    }    
+}
+
 void app_main()
 {
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
+
+    
+    
     wifi_init_sta(NULL);
+
+    
+
+    mc = mex_connect(APP_BROKER_HOST, 60000);
     mex_task(NULL);
-    sleep_task(NULL);
+
+    
 }
