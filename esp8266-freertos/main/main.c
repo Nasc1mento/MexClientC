@@ -129,7 +129,7 @@ void mex_task() {
     char topic[] = "water-level";
 
     const char msg_template[] = "{'distance': 83, 'battery': 37, 'timestamp': '%s'}";
-    //  const char msg_template[] = "{'temperature': %d, 'distance': %d, 'timestamp': '%s'}";
+    //  const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%s'}";
     char msg[sizeof(msg_template) + sizeof(datetime_str)];
 
     while (mc.st == CONNECTED) {
@@ -142,11 +142,11 @@ void mex_task() {
         strftime(datetime_str, sizeof(datetime_str), "%Y-%m-%dT%H:%M:%SZ", &local_time);
 
 
-        // unsigned short int temperature = rand() % 101;
         // unsigned short int distance = rand() % 101;
+        // unsigned short int battery = rand() % 101;
 
         sprintf(msg, msg_template, datetime_str);
-        // sprintf(msg, msg_template, temperature, distance, datetime_str);
+        // sprintf(msg, msg_template, distance, battery, datetime_str);
         publish(&mc, topic, msg);
 
         ESP_LOGI(TAG, "Message sent: %s to topic: %s", msg, topic);
