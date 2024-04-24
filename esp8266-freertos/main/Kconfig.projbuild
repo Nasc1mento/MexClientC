@@ -2,13 +2,13 @@ menu "Application Configuration"
 
     config WIFI_SSID
         string "WiFi SSID"
-        default ""
+        default "Fabi_MauricioWeb"
         help
             SSID (network name) for the Application
 
     config WIFI_PASSWORD
         string "WiFi Password"
-        default ""
+        default "19602019"
         help
             WiFi password (WPA or WPA2) for the Application
 
@@ -35,5 +35,6 @@ menu "Application Configuration"
         default 1
         help
             Device's ID
+
       
 endmenu
