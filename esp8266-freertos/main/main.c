@@ -15,6 +15,13 @@
 #include "power_save.h"
 
 
+///////
+
+
+#define RANDOM
+#define POWER_SAVE
+/////
+
 
 #define APP_WIFI_SSID      CONFIG_WIFI_SSID
 #define APP_WIFI_PASS      CONFIG_WIFI_PASSWORD
@@ -113,6 +120,7 @@ void wifi_init_sta()
 
 
 void mex_task() {
+    struct timeval tv_now;
     mc = mex_connect(APP_BROKER_HOST, 60000);
 
     if (mc.st == CONNECTED) {
@@ -124,36 +132,42 @@ void mex_task() {
 
     time_t current_time;
     struct tm local_time;
-    char datetime_str[20];
+    char datetime_str[24];
+
+    setenv("TZ", "BRT+3", 1);
+    tzset();
 
     char topic[] = "water-level";
-
-    const char msg_template[] = "{'distance': 83, 'battery': 37, 'timestamp': '%s'}";
-    //  const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%s'}";
+    const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%s'}";
     char msg[sizeof(msg_template) + sizeof(datetime_str)];
 
     while (mc.st == CONNECTED) {
-        time(&current_time);
-
-        setenv("TZ", "BRT+3", 1);
-        tzset();
-        
+        gettimeofday(&tv_now, NULL);
+        current_time = tv_now.tv_sec;
         localtime_r(&current_time, &local_time);
-        strftime(datetime_str, sizeof(datetime_str), "%Y-%m-%dT%H:%M:%SZ", &local_time);
 
+        strftime(datetime_str, sizeof(datetime_str), "%Y-%m-%dT%H:%M:%S", &local_time);
+        snprintf(datetime_str + strlen(datetime_str), sizeof(datetime_str) - strlen(datetime_str), ".%03d", (int)(tv_now.tv_usec / 1000));
+        
+        #ifdef RANDOM
+            unsigned short int distance = rand() % 101;
+            unsigned short int battery = rand() % 101;
+            sprintf(msg, msg_template, distance, battery, datetime_str);
+        #else
+            unsigned short int distance = 10;
+            unsigned short int battery = 80;
+            sprintf(msg, msg_template, distance, battery, datetime_str);
+        #endif
 
-        // unsigned short int distance = rand() % 101;
-        // unsigned short int battery = rand() % 101;
-
-        sprintf(msg, msg_template, datetime_str);
-        // sprintf(msg, msg_template, distance, battery, datetime_str);
         publish(&mc, topic, msg);
-
+        
         ESP_LOGI(TAG, "Message sent: %s to topic: %s", msg, topic);
 
         vTaskDelay(3000 / portTICK_PERIOD_MS);
-    }    
+    }
 }
+
+
 
 void sntp_task() {
     sntp_setoperatingmode(SNTP_OPMODE_POLL);
