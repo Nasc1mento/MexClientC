@@ -4,6 +4,9 @@
         "socket.h": "c",
         "freertos.h": "c",
         "nvs_flash.h": "c",
-        "proxy.h": "c"
+        "proxy.h": "c",
+        "client_request_handler.h": "c",
+        "stdbool.h": "c",
+        "esp_netif.h": "c"
     }
 }

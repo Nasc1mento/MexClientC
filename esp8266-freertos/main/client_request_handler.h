@@ -17,12 +17,7 @@ enum v_return {
             PARAM_ERROR
 };
 
-struct mex_client {
-    uint8_t sock_fd;
-    uint8_t st;
-};
-
-struct mex_client mex_connect(char* broker_ip, unsigned short int broker_port);
+uint8_t mex_connect(char* broker_ip, unsigned short int broker_port);
 uint8_t mex_send(uint8_t sock_fd, const char* payload, size_t size);
 uint8_t mex_recv(uint8_t sock_fd, char* buffer, size_t len);
 

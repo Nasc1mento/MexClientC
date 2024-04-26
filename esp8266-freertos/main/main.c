@@ -1,27 +1,27 @@
 #include <string.h>
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/event_groups.h>
+
 #include <esp_system.h>
 #include <esp_log.h>
 #include <esp_netif.h>
 #include <esp_event.h>
+#include <esp_sleep.h>
+#include <esp_sntp.h>
 #include <esp_wifi.h>
+
 #include <nvs.h>
 #include <nvs_flash.h>
-#include <esp_sntp.h>
 
-#include "proxy.h"
-#include "power_save.h"
-
-
-///////
-
+#include "mex.h"
 
 #define RANDOM
 #define POWER_SAVE
-/////
 
+// #define SNTP
+// #define ERASE_NVS
 
 #define APP_WIFI_SSID      CONFIG_WIFI_SSID
 #define APP_WIFI_PASS      CONFIG_WIFI_PASSWORD
@@ -33,17 +33,21 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
 
-#define SNTP_SERVER_NAME   "a.st1.ntp.br"
+#define SNTP_SERVER_NAME   "br.pool.ntp.org"
+
 
 static EventGroupHandle_t xEventBits;
 struct mex_client mc;
+
 
 static const char *TAG = "application using mex";
 
 static int s_retry_num = 0;
 
-static void event_handler(void* arg, esp_event_base_t event_base,
-                                int32_t event_id, void* event_data)
+clock_t start, end;
+double cpu_time_used;
+
+static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
@@ -120,8 +124,7 @@ void wifi_init_sta()
 
 
 void mex_task() {
-    struct timeval tv_now;
-    mc = mex_connect(APP_BROKER_HOST, 60000);
+    mc = create_connection(APP_BROKER_HOST, 60000);
 
     if (mc.st == CONNECTED) {
         ESP_LOGI(TAG, "Connected to broker");
@@ -130,24 +133,14 @@ void mex_task() {
         return;
     }
 
-    time_t current_time;
+    time_t now;
     struct tm local_time;
-    char datetime_str[24];
-
-    setenv("TZ", "BRT+3", 1);
-    tzset();
+    // char datetime_str[20];
 
     char topic[] = "water-level";
-    const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%s'}";
+    const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%.2f'}";
     char msg[sizeof(msg_template) + sizeof(datetime_str)];
 
-    while (mc.st == CONNECTED) {
-        gettimeofday(&tv_now, NULL);
-        current_time = tv_now.tv_sec;
-        localtime_r(&current_time, &local_time);
-
-        strftime(datetime_str, sizeof(datetime_str), "%Y-%m-%dT%H:%M:%S", &local_time);
-        snprintf(datetime_str + strlen(datetime_str), sizeof(datetime_str) - strlen(datetime_str), ".%03d", (int)(tv_now.tv_usec / 1000));
         
         #ifdef RANDOM
             unsigned short int distance = rand() % 101;
@@ -163,36 +156,115 @@ void mex_task() {
         
         ESP_LOGI(TAG, "Message sent: %s to topic: %s", msg, topic);
 
-        vTaskDelay(3000 / portTICK_PERIOD_MS);
-    }
+    return;
 }
 
 
 
-void sntp_task() {
+
+
+
+void set_time() {
+    if (sntp_get_sync_status() != SNTP_SYNC_STATUS_RESET) {
+        ESP_LOGI(TAG, "Time already synchronized");
+        return;
+    }
+
     sntp_setoperatingmode(SNTP_OPMODE_POLL);
     sntp_setservername(0, SNTP_SERVER_NAME);
     sntp_init();
 
-     while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET) { 
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+    while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET) { 
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
+
+    setenv("TZ", "BRT+3", 1);
+    tzset();
 
     ESP_LOGI(TAG, "Time synchronized");
 }
 
-void sleep_task() {
-    deep_sleep(10);
-}
-
-
 void app_main()
 {
-    ESP_ERROR_CHECK(nvs_flash_init());
+    esp_err_t err = nvs_flash_init();
+
+    #ifdef SNTP
+
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+
+    ESP_ERROR_CHECK( err ); 
+
+    nvs_handle_t nvs_handle;
+    err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
+
+    #ifdef ERASE_NVS
+        nvs_flash_erase();
+    #else // ERASE_NVS
+    
+
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "Error (%s) opening NVS handle!\n", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "NVS handle opened\n");
+
+
+        err = nvs_get_i32(nvs_handle, "sleep_counter", &sleep_counter);
+
+        switch (err) {
+            case ESP_OK:
+                ESP_LOGI(TAG, "Restart counter = %d\n", sleep_counter);
+                break;
+            case ESP_ERR_NVS_NOT_FOUND:
+                ESP_LOGI(TAG, "sleep_counter is not initialized yet!\n");
+                break;
+            default :
+                ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
+        } 
+    }
+
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
 
     wifi_init_sta();
-    sntp_task();    
+    if (sleep_counter == 0) {
+        set_time();
+    }
+
     mex_task(); 
-    // sleep_task();   
-}
+    #ifdef POWER_SAVE
+        sleep_counter++;
+        err = nvs_set_i32(nvs_handle, "sleep_counter", sleep_counter);
+        if (err != ESP_OK) {
+            ESP_LOGI(TAG, "Error (%s) writing!\n", esp_err_to_name(err));
+        } else {
+            ESP_LOGI(TAG, "sleep_counter updated\n");
+        }
+
+        err = nvs_commit(nvs_handle);
+        if (err != ESP_OK) {
+            ESP_LOGI(TAG, "Error (%s) committing!\n", esp_err_to_name(err));
+        } else {
+            ESP_LOGI(TAG, "Changes committed\n");
+        }
+        nvs_close(nvs_handle);
+        deep_sleep(10);
+
+    #endif // POWER_SAVE
+    #endif // ERASE_NVS
+    #else
+
+    ESP_ERROR_CHECK( err );
+    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
+
+    wifi_init_sta();
+    mex_task();
+    #ifdef POWER_SAVE
+        deep_sleep(10);
+    #endif
+
+
+
+    #endif
+} 

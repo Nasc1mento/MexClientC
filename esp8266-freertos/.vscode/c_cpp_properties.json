@@ -49,7 +49,7 @@
                 "${IDF_PATH}/components/vfs/include",
                 "${IDF_PATH}/components/wifi_provisioning/include",
                 "${IDF_PATH}/components/wpa_supplicant/include",
-                "${IDF_PATH}/components/esp_sntp/include",
+                "${IDF_PATH}/components/esp_sntp/include"
                 
             ]
         }

@@ -1,11 +1,9 @@
 #include "client_request_handler.h"
 
-struct mex_client mex_connect(char* mex_broker_ip, unsigned short int mex_broker_port) {
+uint8_t mex_connect(char* mex_broker_ip, unsigned short int mex_broker_port) {
     char addr_str[128];
-    struct mex_client mc;
     struct sockaddr_in broker_info;
-
-    mc.st = NOT_CONNECTED;
+    uint8_t sock_fd;
 
     broker_info.sin_addr.s_addr = inet_addr(mex_broker_ip);
     broker_info.sin_family = AF_INET;
@@ -13,18 +11,18 @@ struct mex_client mex_connect(char* mex_broker_ip, unsigned short int mex_broker
     broker_info.sin_port = htons(mex_broker_port);
     inet_ntoa_r(broker_info.sin_addr, addr_str, sizeof(addr_str) - 1);
 
-    mc.sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
 
-    if (mc.sock_fd < 0) {
-        close(mc.sock_fd);
+    if (sock_fd < 0) {
+        close(sock_fd);
     }
 
-    if (connect(mc.sock_fd, (struct sockaddr *)&broker_info, sizeof(broker_info)) != 0) {
-        close(mc.sock_fd);
-    } else {
-        mc.st = CONNECTED;
-    }
-    return mc;
+    if (connect(sock_fd, (struct sockaddr *)&broker_info, sizeof(broker_info)) != 0) {
+        close(sock_fd);
+        return -1;
+    } 
+
+    return sock_fd;
 }
 
 uint8_t mex_send(uint8_t sock_fd, const char* payload, size_t size) {
@@ -40,14 +38,13 @@ uint8_t mex_send(uint8_t sock_fd, const char* payload, size_t size) {
         size_str[0] = '0';
     }
 
+    size_t buffer_size = 10 + size;
 
-    send(sock_fd, size_str, 10, 0);
+    char buffer[buffer_size];
+    strcpy(buffer, size_str);
+    strcat(buffer, payload);
 
-
-    send(sock_fd, payload, size, 0);
-    
-
-    return MEX_OK;
+    return send(sock_fd, buffer, buffer_size, 0) == buffer_size ? MEX_OK : SEND_ERROR;
 }
 
 
