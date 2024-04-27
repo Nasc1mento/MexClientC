@@ -7,6 +7,7 @@
         "proxy.h": "c",
         "client_request_handler.h": "c",
         "stdbool.h": "c",
-        "esp_netif.h": "c"
+        "esp_netif.h": "c",
+        "stdio.h": "c"
     }
 }

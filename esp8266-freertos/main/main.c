@@ -1,11 +1,15 @@
 #include <string.h>
-
+#include <stdio.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/event_groups.h>
 
 #include <esp_system.h>
+#include <inttypes.h>
+
 #include <esp_log.h>
+#include <esp_err.h>
+#include <esp_timer.h>
 #include <esp_netif.h>
 #include <esp_event.h>
 #include <esp_sleep.h>
@@ -14,14 +18,14 @@
 
 #include <nvs.h>
 #include <nvs_flash.h>
+#include <time.h>
 
+#include "power_save.h"
+#include "app_const.h"
 #include "mex.h"
 
 #define RANDOM
 #define POWER_SAVE
-
-// #define SNTP
-// #define ERASE_NVS
 
 #define APP_WIFI_SSID      CONFIG_WIFI_SSID
 #define APP_WIFI_PASS      CONFIG_WIFI_PASSWORD
@@ -44,10 +48,11 @@ static const char *TAG = "application using mex";
 
 static int s_retry_num = 0;
 
-clock_t start, end;
-double cpu_time_used;
+char cpu_time_used_str[20];
 
-static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
+
+/*-----------WIFI----------------*/
+static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_id, void* event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
@@ -122,6 +127,7 @@ void wifi_init_sta()
 }
 
 
+/*------------------APPLICATION----------------------*/
 
 void mex_task() {
     mc = create_connection(APP_BROKER_HOST, 60000);
@@ -133,77 +139,40 @@ void mex_task() {
         return;
     }
 
-    time_t now;
-    struct tm local_time;
-    // char datetime_str[20];
-
     char topic[] = "water-level";
-    const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%.2f'}";
-    char msg[sizeof(msg_template) + sizeof(datetime_str)];
+    const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%s'}";
+    char msg[sizeof(msg_template) + sizeof(cpu_time_used_str)+ 20];
 
         
-        #ifdef RANDOM
-            unsigned short int distance = rand() % 101;
-            unsigned short int battery = rand() % 101;
-            sprintf(msg, msg_template, distance, battery, datetime_str);
-        #else
-            unsigned short int distance = 10;
-            unsigned short int battery = 80;
-            sprintf(msg, msg_template, distance, battery, datetime_str);
-        #endif
+    unsigned short int distance = rand() % 201;
+    unsigned short int battery = rand() % 101;
 
-        publish(&mc, topic, msg);
-        
-        ESP_LOGI(TAG, "Message sent: %s to topic: %s", msg, topic);
+    sprintf(msg, msg_template, distance, battery, cpu_time_used_str);
+
+    publish(&mc, topic, msg);
+    
+    ESP_LOGI(TAG, "Message sent: %s to topic: %s", msg, topic);
 
     return;
 }
 
 
-
-
-
-
-void set_time() {
-    if (sntp_get_sync_status() != SNTP_SYNC_STATUS_RESET) {
-        ESP_LOGI(TAG, "Time already synchronized");
-        return;
-    }
-
-    sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, SNTP_SERVER_NAME);
-    sntp_init();
-
-    while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET) { 
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
-
-    setenv("TZ", "BRT+3", 1);
-    tzset();
-
-    ESP_LOGI(TAG, "Time synchronized");
-}
-
 void app_main()
 {
+    int64_t start, end;
     esp_err_t err = nvs_flash_init();
+    
+    /*---START TIMER---*/
+    start = esp_timer_get_time();
 
-    #ifdef SNTP
 
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
 
-    ESP_ERROR_CHECK( err ); 
-
     nvs_handle_t nvs_handle;
     err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
-
-    #ifdef ERASE_NVS
-        nvs_flash_erase();
-    #else // ERASE_NVS
-    
 
     if (err != ESP_OK) {
         ESP_LOGI(TAG, "Error (%s) opening NVS handle!\n", esp_err_to_name(err));
@@ -211,14 +180,17 @@ void app_main()
         ESP_LOGI(TAG, "NVS handle opened\n");
 
 
-        err = nvs_get_i32(nvs_handle, "sleep_counter", &sleep_counter);
+        size_t size = 20;
+
+        /*---READ TIMER FROM NVS---*/
+        err = nvs_get_str(nvs_handle, "cpu_time_used", cpu_time_used_str, &size);
 
         switch (err) {
             case ESP_OK:
-                ESP_LOGI(TAG, "Restart counter = %d\n", sleep_counter);
+                ESP_LOGI(TAG, "Restart = %s\n", cpu_time_used_str);
                 break;
             case ESP_ERR_NVS_NOT_FOUND:
-                ESP_LOGI(TAG, "sleep_counter is not initialized yet!\n");
+                ESP_LOGI(TAG, "cpu_time_used is not initialized yet!\n");
                 break;
             default :
                 ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
@@ -226,45 +198,44 @@ void app_main()
     }
 
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
-
     wifi_init_sta();
-    if (sleep_counter == 0) {
-        set_time();
+    
+    mex_task();
+
+    end = esp_timer_get_time();
+
+    printf("start: %" PRId32 "%" PRId32 "\n", (int) (start >> 32), (int) start);
+    printf("end: %" PRId32 "%" PRId32 "\n", (int) (end >> 32), (int) end);
+    printf("diff: %" PRId32 "%" PRId32 "\n", (int) ((end - start) >> 32), (int) (end - start));
+    // start save
+    sprintf(cpu_time_used_str, "%" PRId32 "%" PRId32, (int) ((end - start) >> 32), (int)((end - start)/1000));
+
+    /*---SAVE TIMER TO NVS---*/
+    err = nvs_set_str(nvs_handle, "cpu_time_used", cpu_time_used_str);
+
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "Error (%s) writing!\n", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "sleep_counter updated\n");
     }
 
-    mex_task(); 
-    #ifdef POWER_SAVE
-        sleep_counter++;
-        err = nvs_set_i32(nvs_handle, "sleep_counter", sleep_counter);
-        if (err != ESP_OK) {
-            ESP_LOGI(TAG, "Error (%s) writing!\n", esp_err_to_name(err));
-        } else {
-            ESP_LOGI(TAG, "sleep_counter updated\n");
-        }
 
-        err = nvs_commit(nvs_handle);
-        if (err != ESP_OK) {
-            ESP_LOGI(TAG, "Error (%s) committing!\n", esp_err_to_name(err));
-        } else {
-            ESP_LOGI(TAG, "Changes committed\n");
-        }
-        nvs_close(nvs_handle);
-        deep_sleep(10);
+    err = nvs_commit(nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "Error (%s) committing!\n", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "Changes committed\n");
+    }
 
-    #endif // POWER_SAVE
-    #endif // ERASE_NVS
-    #else
+    nvs_close(nvs_handle);
 
-    ESP_ERROR_CHECK( err );
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
 
-    wifi_init_sta();
-    mex_task();
-    #ifdef POWER_SAVE
-        deep_sleep(10);
+    #ifdef ADAPTATION
+
+
     #endif
 
-
-
+    #ifdef POWER_SAVE
+        deep_sleep(3);
     #endif
 } 
