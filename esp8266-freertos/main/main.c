@@ -20,9 +20,16 @@
 #include <nvs_flash.h>
 #include <time.h>
 
-#include "power_save.h"
-#include "app_const.h"
+#include "app_config.h"
 #include "mex.h"
+
+#define ADAPT
+// #define MQTT
+
+#ifdef MQTT
+    #include "mqtt_client.h"
+#endif
+
 
 #define RANDOM
 #define POWER_SAVE
@@ -37,12 +44,8 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
 
-#define SNTP_SERVER_NAME   "br.pool.ntp.org"
-
-
 static EventGroupHandle_t xEventBits;
 struct mex_client mc;
-
 
 static const char *TAG = "application using mex";
 
@@ -50,6 +53,12 @@ static int s_retry_num = 0;
 
 char cpu_time_used_str[20];
 
+//duty cicle
+unsigned int loop_interval = 30;
+
+unsigned int interval_counter = 0;
+
+struct parameters param;
 
 /*-----------WIFI----------------*/
 static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_id, void* event_data)
@@ -130,6 +139,42 @@ void wifi_init_sta()
 /*------------------APPLICATION----------------------*/
 
 void mex_task() {
+
+    char topic[] = "water-level";
+    const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%s'}";
+    char msg[sizeof(msg_template) + sizeof(cpu_time_used_str)+ 20];
+
+    //time(NULL) not working, another way to get a random number between 0 and 200
+    int seed = esp_random();
+    srand(seed);
+
+
+
+    param.battery = 100;
+    param.temperature = 30;
+    param.distance = rand() % 21;
+
+    param.reservoir_capacity = (1* 10*20) * 10;
+    param.fluid_volume = (1* 10*param.distance) * 10;
+
+    sprintf(msg, msg_template, param.distance, param.battery, cpu_time_used_str);
+
+#ifdef MQTT
+
+    esp_mqtt_client_handle_t client;
+
+    esp_mqtt_client_config_t mqtt_cfg = {
+        .uri = "mqtt://192.168.0.111",
+        .port = 1883,
+    };
+
+    client = esp_mqtt_client_init(&mqtt_cfg);
+    esp_mqtt_client_start(client);
+
+    esp_mqtt_client_publish(client, topic, msg, 0, 1, 0);
+
+#else
+
     mc = create_connection(APP_BROKER_HOST, 60000);
 
     if (mc.st == CONNECTED) {
@@ -139,32 +184,33 @@ void mex_task() {
         return;
     }
 
-    char topic[] = "water-level";
-    const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%s'}";
-    char msg[sizeof(msg_template) + sizeof(cpu_time_used_str)+ 20];
-
-        
-    unsigned short int distance = rand() % 201;
-    unsigned short int battery = rand() % 101;
-
-    sprintf(msg, msg_template, distance, battery, cpu_time_used_str);
-
     publish(&mc, topic, msg);
     
     ESP_LOGI(TAG, "Message sent: %s to topic: %s", msg, topic);
 
-    return;
+#endif
+}
+
+void adaptation() {
+    ESP_LOGI(TAG, "Adaptation is running");
+    struct adapter ad = adapter_init("192.168.0.111", 60010);
+
+    param.battery = 100;
+    param.temperature = 30;
+
+    submit_data(&ad, param.fluid_volume, param.reservoir_capacity, param.temperature, param.battery);
+    
+    loop_interval = adapt(ad.sock_fd);
+    ESP_LOGI(TAG, "Loop interval: %d", loop_interval);
 }
 
 
 void app_main()
 {
-    int64_t start, end;
-    esp_err_t err = nvs_flash_init();
-    
     /*---START TIMER---*/
-    start = esp_timer_get_time();
-
+    int64_t start = esp_timer_get_time();
+    int64_t end;
+    esp_err_t err = nvs_flash_init();
 
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -179,11 +225,10 @@ void app_main()
     } else {
         ESP_LOGI(TAG, "NVS handle opened\n");
 
-
         size_t size = 20;
 
         /*---READ TIMER FROM NVS---*/
-        err = nvs_get_str(nvs_handle, "cpu_time_used", cpu_time_used_str, &size);
+        err = nvs_get_str(nvs_handle, "ctu", cpu_time_used_str, &size);
 
         switch (err) {
             case ESP_OK:
@@ -195,23 +240,57 @@ void app_main()
             default :
                 ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
         } 
+
+        err = nvs_get_u32(nvs_handle, "i_c", &interval_counter);
+
+        switch (err) {
+            case ESP_OK:
+                ESP_LOGI(TAG, "Restart = %d\n", interval_counter);
+                break;
+            case ESP_ERR_NVS_NOT_FOUND:
+                ESP_LOGI(TAG, "interval_counter is not initialized yet!\n");
+                break;
+            default :
+                ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
+        }
+
+        err = nvs_get_u8(nvs_handle, "li", &loop_interval);
+
+        switch (err) {
+            case ESP_OK:
+                ESP_LOGI(TAG, "Restart = %d\n", loop_interval);
+                break;
+            case ESP_ERR_NVS_NOT_FOUND:
+                ESP_LOGI(TAG, "loop_interval is not initialized yet!\n");
+                break;
+            default :
+                ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
+        }
     }
 
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
-    
+
     mex_task();
 
-    end = esp_timer_get_time();
+#ifdef ADAPT
+    ESP_LOGI(TAG, "loop_interval: %d", loop_interval);
+    ESP_LOGI(TAG, "Interval counter: %d", interval_counter);
+    if (interval_counter >= 60) {
+        adaptation();  
+        interval_counter = 0;
+    } else {
+        ESP_LOGI(TAG, "Adaptation not needed");
+    
+    }
+#endif // ADAPTATION
 
-    printf("start: %" PRId32 "%" PRId32 "\n", (int) (start >> 32), (int) start);
-    printf("end: %" PRId32 "%" PRId32 "\n", (int) (end >> 32), (int) end);
-    printf("diff: %" PRId32 "%" PRId32 "\n", (int) ((end - start) >> 32), (int) (end - start));
-    // start save
-    sprintf(cpu_time_used_str, "%" PRId32 "%" PRId32, (int) ((end - start) >> 32), (int)((end - start)/1000));
+    end = esp_timer_get_time();
+    
+    sprintf(cpu_time_used_str, "%" PRId32 "%" PRId32, (int) ((end - start) >> 32), (int)((end - start) /1000));
 
     /*---SAVE TIMER TO NVS---*/
-    err = nvs_set_str(nvs_handle, "cpu_time_used", cpu_time_used_str);
+    err = nvs_set_str(nvs_handle, "ctu", cpu_time_used_str);
 
     if (err != ESP_OK) {
         ESP_LOGI(TAG, "Error (%s) writing!\n", esp_err_to_name(err));
@@ -219,8 +298,46 @@ void app_main()
         ESP_LOGI(TAG, "sleep_counter updated\n");
     }
 
+    err = nvs_commit(nvs_handle);
+
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "Error (%s) committing!\n", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "Changes committed\n");
+    }
+
+
+    if (interval_counter >= 60) {
+        err = nvs_set_u32(nvs_handle, "i_c", loop_interval);
+    } else {
+        interval_counter += loop_interval;
+        err = nvs_set_u32(nvs_handle, "i_c", interval_counter);
+    }
+
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "Error (%s) writing!\n", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "sleep_counter updated\n");
+    }
 
     err = nvs_commit(nvs_handle);
+
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "Error (%s) committing!\n", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "Changes committed\n");
+    }
+
+    err = nvs_set_u8(nvs_handle, "li", loop_interval);
+
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "Error (%s) writing!\n", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "sleep_counter updated\n");
+    }
+
+    err = nvs_commit(nvs_handle);
+
     if (err != ESP_OK) {
         ESP_LOGI(TAG, "Error (%s) committing!\n", esp_err_to_name(err));
     } else {
@@ -229,13 +346,7 @@ void app_main()
 
     nvs_close(nvs_handle);
 
-
-    #ifdef ADAPTATION
-
-
-    #endif
-
     #ifdef POWER_SAVE
-        deep_sleep(3);
+        deep_sleep(loop_interval);
     #endif
 } 
