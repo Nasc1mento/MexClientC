@@ -2,7 +2,6 @@
 #define MEX_H
 
 #include "proxy.h"
-#include "power_save.h"
 #include "adapter.h"
 
 

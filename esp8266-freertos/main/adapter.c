@@ -1,9 +1,6 @@
 #include "adapter.h"
 
 
-// b'ADAPT\nThing:1-new-adryan\nfluid_volume:800.0\nreservoir_capacity:1000.0\ntemperature:30\nbattery:100'
-
-
 struct adapter adapter_init(char *managing_system_host, unsigned short int managing_system_port) {
     char addr_str[128];
     struct sockaddr_in broker_info;
@@ -18,7 +15,7 @@ struct adapter adapter_init(char *managing_system_host, unsigned short int manag
     ad.sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
 
     if (ad.sock_fd < 0) {
-        close(ad.sock_fd);
+        close(ad.sock_fd);    printf(buffer);
     }
 
     if (connect(ad.sock_fd, (struct sockaddr *)&broker_info, sizeof(broker_info)) != 0) {
@@ -28,12 +25,30 @@ struct adapter adapter_init(char *managing_system_host, unsigned short int manag
     return ad;
 }
 
-uint8_t submit_data(const struct adapter *ad, int fluid_volume, int reservoir_capacity, int temperature, int battery) {
-    char buffer[128];
-    snprintf(buffer, sizeof buffer, "ADAPT\nThing:1-new-adryan\nfluid_volume:%d\nreservoir_capacity:%d\ntemperature:%d\nbattery:%d\n", fluid_volume, reservoir_capacity, temperature, battery);
-    return send(ad->sock_fd, buffer, sizeof buffer, 0) == sizeof buffer ? 0 : -1;
-}
+uint8_t submit_data(const struct adapter *ad, int num_args, ...) {
+    va_list valist;
+    va_start(valist, num_args);
 
+    char buffer[128];
+    char *buffer_ptr = buffer;
+
+    buffer_ptr += sprintf(buffer_ptr, "ADAPT\nThing:1-new-adryan\n");
+
+    for (int i = 0; i < num_args; i++) {
+        char *key = va_arg(valist, char *);
+        char *value = va_arg(valist, char *);
+
+        buffer_ptr += sprintf(buffer_ptr, "%s:%s\n", key, value);
+    }
+    
+    // b'ADAPT\nThing:1-new-adryan\nfluid_volume:800.0\nreservoir_capacity:1000.0\ntemperature:30\nbattery:100'
+
+    va_end(valist);
+
+    printf(buffer);
+
+    return send(ad->sock_fd, buffer, strlen(buffer), 0) == strlen(buffer) ? 0 : 1;
+}
 uint8_t adapt(uint8_t sock_fd) {
     char buffer[128];
     ssize_t b = recv(sock_fd, buffer, sizeof buffer - 1, 0);

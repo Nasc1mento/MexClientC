@@ -19,8 +19,11 @@
 #include <nvs.h>
 #include <nvs_flash.h>
 #include <time.h>
-
 #include "app_config.h"
+#include "power_save.h"
+#include "nvs_handler.h"
+
+
 #include "mex.h"
 
 #define ADAPT
@@ -144,7 +147,6 @@ void mex_task() {
     const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%s'}";
     char msg[sizeof(msg_template) + sizeof(cpu_time_used_str)+ 20];
 
-    //time(NULL) not working, another way to get a random number between 0 and 200
     int seed = esp_random();
     srand(seed);
 
@@ -198,7 +200,14 @@ void adaptation() {
     param.battery = 100;
     param.temperature = 30;
 
-    submit_data(&ad, param.fluid_volume, param.reservoir_capacity, param.temperature, param.battery);
+    submit_data(
+        &ad, 
+        4,
+        "fluid_volume", param.fluid_volume,
+        "reservoir_capacity", param.reservoir_capacity,
+        "temperature", param.temperature,
+        "battery", param.battery
+    );
     
     loop_interval = adapt(ad.sock_fd);
     ESP_LOGI(TAG, "Loop interval: %d", loop_interval);

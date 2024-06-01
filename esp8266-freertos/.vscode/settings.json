@@ -9,6 +9,7 @@
         "stdbool.h": "c",
         "esp_netif.h": "c",
         "stdio.h": "c",
-        "mqtt_client.h": "c"
+        "mqtt_client.h": "c",
+        "mex.h": "c"
     }
 }
