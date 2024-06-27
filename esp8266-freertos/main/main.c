@@ -21,7 +21,6 @@
 #include <time.h>
 #include "app_config.h"
 #include "power_save.h"
-#include "nvs_handler.h"
 
 
 #include "mex.h"
@@ -200,14 +199,11 @@ void adaptation() {
     param.battery = 100;
     param.temperature = 30;
 
-    submit_data(
-        &ad, 
-        4,
-        "fluid_volume", param.fluid_volume,
-        "reservoir_capacity", param.reservoir_capacity,
-        "temperature", param.temperature,
-        "battery", param.battery
-    );
+    submit_data(&ad, 4,
+     "fluid_volume", "800.0",
+     "reservoir_capacity", "1000.0", 
+     "temperature", "30", 
+     "battery", "100");
     
     loop_interval = adapt(ad.sock_fd);
     ESP_LOGI(TAG, "Loop interval: %d", loop_interval);

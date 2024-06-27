@@ -15,7 +15,7 @@ struct adapter adapter_init(char *managing_system_host, unsigned short int manag
     ad.sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
 
     if (ad.sock_fd < 0) {
-        close(ad.sock_fd);    printf(buffer);
+        close(ad.sock_fd);
     }
 
     if (connect(ad.sock_fd, (struct sockaddr *)&broker_info, sizeof(broker_info)) != 0) {
@@ -45,7 +45,7 @@ uint8_t submit_data(const struct adapter *ad, int num_args, ...) {
 
     va_end(valist);
 
-    printf(buffer);
+    printf("%s", buffer);
 
     return send(ad->sock_fd, buffer, strlen(buffer), 0) == strlen(buffer) ? 0 : 1;
 }
@@ -72,7 +72,7 @@ uint8_t adapt(uint8_t sock_fd) {
         }
     }
 
-    printf(buffer);
+    printf("%s", buffer);
 
     return loop_interval;
 }
