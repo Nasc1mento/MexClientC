@@ -16,6 +16,6 @@
 #define THING_ID                1
 
 char *marshaller(const char *operation, const char *topics, const char *message);
-void unmarshaller(const char *operation, const char *topics);
+void unmarshaller(const char *operation, const char *topics, char *buffer);
 
 #endif // MARSHALLER_H

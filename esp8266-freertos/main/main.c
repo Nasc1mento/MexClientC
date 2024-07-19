@@ -205,9 +205,78 @@ void adaptation() {
      "temperature", "30", 
      "battery", "100");
     
-    loop_interval = adapt(ad.sock_fd);
+    loop_interval = atoi(adapt(ad.sock_fd, "loop_interval"));
     ESP_LOGI(TAG, "Loop interval: %d", loop_interval);
 }
+
+
+
+/*---NVS HANDLING---*/
+// void read_nvs (nvs_handle_t handle, const char *key, void *value, size_t size, nvs_type_t type) {
+//     esp_err_t err;
+//     switch (type) {
+//         case NVS_TYPE_STR:
+//             err = nvs_get_str(handle, key, (const char*)value, &size);
+//             break;
+//         case NVS_TYPE_U32:
+//             err = nvs_get_u32(handle, key, *(uint32_t*)value);
+//             break;
+//         case NVS_TYPE_U8:
+//             err = nvs_get_u8(handle, key, *(uint8_t*)value);
+//             break;
+//         default:
+//             break;
+//             return;
+//     }
+
+//     switch (err) {
+//         case ESP_OK:
+//             ESP_LOGI(TAG, "Restart = %s\n", (char*)value);
+//             break;
+//         case ESP_ERR_NVS_NOT_FOUND:
+//             ESP_LOGI(TAG, "cpu_time_used is not initialized yet!\n");
+//             break;
+//         default :
+//             ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
+    
+//     }
+// }
+
+// void save_nvs (nvs_handle_t handle, const char* key, const void* value, nvs_type_t type) {
+//     esp_err_t err;
+//     switch (type) {
+//         case NVS_TYPE_STR:
+//             err = nvs_set_str(handle, key, (const char*)value);
+//             break;
+//         case NVS_TYPE_U32:
+//             err = nvs_set_u32(handle, key, *(uint32_t*)value);
+//             break;
+//         case NVS_TYPE_U8:
+//             err = nvs_set_u8(handle, key, *(uint8_t*)value);
+//             break;
+//         default:
+//             break;
+//             ESP_LOGI(TAG, "Invalid");
+//             return;
+//     }
+
+
+// }
+
+// void commit_nvs(nvs_handle_t handle) {
+//     esp_err_t err = nvs_commit(handle);
+
+//     if (err != ESP_OK) {
+//         ESP_LOGI(TAG, "Error (%s) committing!\n", esp_err_to_name(err));
+//     } else {
+//         ESP_LOGI(TAG, "Changes committed\n");
+//     }
+// }
+
+/*End NVS*/
+
+
+
 
 
 void app_main()

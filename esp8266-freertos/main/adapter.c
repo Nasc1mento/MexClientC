@@ -26,6 +26,7 @@ struct adapter adapter_init(char *managing_system_host, unsigned short int manag
 }
 
 uint8_t submit_data(const struct adapter *ad, int num_args, ...) {
+    
     va_list valist;
     va_start(valist, num_args);
 
@@ -49,7 +50,7 @@ uint8_t submit_data(const struct adapter *ad, int num_args, ...) {
 
     return send(ad->sock_fd, buffer, strlen(buffer), 0) == strlen(buffer) ? 0 : 1;
 }
-uint8_t adapt(uint8_t sock_fd) {
+char* adapt(uint8_t sock_fd, char *param) {
     char buffer[128];
     ssize_t b = recv(sock_fd, buffer, sizeof buffer - 1, 0);
 
@@ -60,19 +61,17 @@ uint8_t adapt(uint8_t sock_fd) {
 
     buffer[b] = '\0';
 
-    int loop_interval = 0;
+    char *response = strstr(buffer, param);
 
-    char *loop_interval_str = strstr(buffer, "loop_interval");
-    if (loop_interval_str) {
-        loop_interval_str += strlen("loop_interval");
-        loop_interval_str = strchr(loop_interval_str, ':');
-        if (loop_interval_str) {
-            loop_interval_str++;
-            loop_interval = atoi(loop_interval_str);
+    if (response) {
+        response += strlen(param);
+        response = strchr(response, ':');
+        if (response) {
+            response++;
         }
     }
 
     printf("%s", buffer);
 
-    return loop_interval;
+    return response;
 }

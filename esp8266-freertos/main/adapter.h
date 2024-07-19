@@ -13,6 +13,6 @@ struct adapter {
 
 struct adapter adapter_init(char *managing_system_host, unsigned short int managing_system_port);
 uint8_t submit_data(const struct adapter *ad, int num_args, ...);
-uint8_t adapt(uint8_t sock_fd);
+char* adapt(uint8_t sock_fd, char *param);
 
 #endif // ADAPTER_H

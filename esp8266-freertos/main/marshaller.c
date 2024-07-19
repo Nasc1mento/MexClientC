@@ -12,4 +12,7 @@ char *marshaller(const char *operation, const char *topics, const char *message)
     return payload;
 }
 
-void unmarshaller(const char *operation, const char *topics) {} 
+void unmarshaller(const char *operation, const char *topics, char *buffer) {
+    
+
+} 
