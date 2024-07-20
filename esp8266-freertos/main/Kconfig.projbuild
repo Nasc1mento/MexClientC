@@ -31,10 +31,18 @@ menu "Application Configuration"
             Broker Port for the Application
 
     config THING_ID
-        int "Thing ID"
-        default 1
+        string "Thing ID"
+        default "1-new-adryan"
         help
             Device's ID
+
+    config ADAPTER_HOST
+        string "Adapter Host"
+        default "192.168.0.111"
+
+    config ADAPTER_PORT
+        int "ADAPTER_PORT"
+        default 60010
 
       
 endmenu

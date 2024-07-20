@@ -33,7 +33,7 @@ uint8_t submit_data(const struct adapter *ad, int num_args, ...) {
     char buffer[128];
     char *buffer_ptr = buffer;
 
-    buffer_ptr += sprintf(buffer_ptr, "ADAPT\nThing:1-new-adryan\n");
+    buffer_ptr += sprintf(buffer_ptr, "ADAPT\nThing:%s\n", THING_ID);
 
     for (int i = 0; i < num_args; i++) {
         char *key = va_arg(valist, char *);
@@ -50,6 +50,7 @@ uint8_t submit_data(const struct adapter *ad, int num_args, ...) {
 
     return send(ad->sock_fd, buffer, strlen(buffer), 0) == strlen(buffer) ? 0 : 1;
 }
+
 char* adapt(uint8_t sock_fd, char *param) {
     char buffer[128];
     ssize_t b = recv(sock_fd, buffer, sizeof buffer - 1, 0);

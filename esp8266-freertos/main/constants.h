@@ -1,0 +1,21 @@
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
+
+#include <sdkconfig.h>
+
+#define WIFI_SSID           CONFIG_WIFI_SSID
+#define WIFI_PASS           CONFIG_WIFI_PASSWORD
+#define MAXIMUM_RETRY       CONFIG_MAXIMUM_RETRY
+
+#define BROKER_HOST         CONFIG_BROKER_HOST
+#define BROKER_PORT         CONFIG_BROKER_PORT
+
+#define ADAPTER_HOST        CONFIG_ADAPTER_HOST
+#define ADAPTER_PORT        CONFIG_ADAPTER_PORT
+#define ADAPTER_THING
+
+#define THING_ID            CONFIG_THING_ID
+
+#endif // CONSTANTS_H
+
+

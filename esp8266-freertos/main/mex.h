@@ -4,5 +4,4 @@
 #include "proxy.h"
 #include "adapter.h"
 
-
 #endif // MEX_H

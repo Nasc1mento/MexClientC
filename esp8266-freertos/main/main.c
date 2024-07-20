@@ -21,6 +21,7 @@
 #include <time.h>
 #include "app_config.h"
 #include "power_save.h"
+#include "constants.h"
 
 
 #include "mex.h"
@@ -36,31 +37,24 @@
 #define RANDOM
 #define POWER_SAVE
 
-#define APP_WIFI_SSID      CONFIG_WIFI_SSID
-#define APP_WIFI_PASS      CONFIG_WIFI_PASSWORD
-#define APP_MAXIMUM_RETRY  CONFIG_MAXIMUM_RETRY
-
-#define APP_BROKER_HOST    CONFIG_BROKER_HOST
-#define APP_BROKER_PORT    CONFIG_BROKER_PORT
-
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
+#define WIFI_CONNECTED_BIT                  BIT0
+#define WIFI_FAIL_BIT                       BIT1
 
 static EventGroupHandle_t xEventBits;
-struct mex_client mc;
+static struct mex_client mc;
 
-static const char *TAG = "application using mex";
+static const char *TAG =                    "application using mex";
 
-static int s_retry_num = 0;
-
-char cpu_time_used_str[20];
+static int s_retry_num =                    0;
 
 //duty cicle
-unsigned int loop_interval = 30;
+static uint8_t loop_interval =              30;
+static uint8_t interval_counter =           0;
+static char cpu_time_used_str[20];
 
-unsigned int interval_counter = 0;
 
-struct parameters param;
+static struct parameters param;
+
 
 /*-----------WIFI----------------*/
 static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_id, void* event_data)
@@ -68,7 +62,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < APP_MAXIMUM_RETRY) {
+        if (s_retry_num < MAXIMUM_RETRY) {
             esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "retry to connect to the AP");
@@ -100,8 +94,8 @@ void wifi_init_sta()
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = APP_WIFI_SSID,
-            .password = APP_WIFI_PASS
+            .ssid = WIFI_SSID,
+            .password = WIFI_PASS
         },
     };
 
@@ -123,10 +117,10 @@ void wifi_init_sta()
             portMAX_DELAY);
 
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "connected to ap SSID:%s password:%s", APP_WIFI_SSID, APP_WIFI_PASS);
+        ESP_LOGI(TAG, "connected to ap SSID:%s password:%s", WIFI_SSID, WIFI_PASS);
                  
     } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s", APP_WIFI_SSID, APP_WIFI_PASS);
+        ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s", WIFI_SSID, WIFI_PASS);
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
@@ -143,22 +137,19 @@ void wifi_init_sta()
 void mex_task() {
 
     char topic[] = "water-level";
-    const char msg_template[] = "{'distance': %d, 'battery': %d, 'timestamp': '%s'}";
-    char msg[sizeof(msg_template) + sizeof(cpu_time_used_str)+ 20];
+    const char msg_template[] = "{'distance': %d, 'battery': %s, 'timer': '%s'}";
+    char msg[sizeof(msg_template) + sizeof(cpu_time_used_str)];
 
     int seed = esp_random();
     srand(seed);
 
 
+    int distance_read = rand() % 21;
 
-    param.battery = 100;
-    param.temperature = 30;
-    param.distance = rand() % 21;
+    param.reservoir_capacity = RECTANGLE_WIDTH * RECTANGLE_LENGTH * RECTANGLE_HEIGHT;
+    param.fluid_volume = RECTANGLE_WIDTH * RECTANGLE_LENGTH * distance_read;
 
-    param.reservoir_capacity = (1* 10*20) * 10;
-    param.fluid_volume = (1* 10*param.distance) * 10;
-
-    sprintf(msg, msg_template, param.distance, param.battery, cpu_time_used_str);
+    sprintf(msg, msg_template, distance_read, BATTERY, cpu_time_used_str);
 
 #ifdef MQTT
 
@@ -176,7 +167,7 @@ void mex_task() {
 
 #else
 
-    mc = create_connection(APP_BROKER_HOST, 60000);
+    mc = create_connection(BROKER_HOST, BROKER_PORT);
 
     if (mc.st == CONNECTED) {
         ESP_LOGI(TAG, "Connected to broker");
@@ -194,88 +185,21 @@ void mex_task() {
 
 void adaptation() {
     ESP_LOGI(TAG, "Adaptation is running");
-    struct adapter ad = adapter_init("192.168.0.111", 60010);
+    struct adapter ad = adapter_init(ADAPTER_HOST, ADAPTER_PORT);
 
     param.battery = 100;
     param.temperature = 30;
 
     submit_data(&ad, 4,
-     "fluid_volume", "800.0",
-     "reservoir_capacity", "1000.0", 
-     "temperature", "30", 
-     "battery", "100");
+     "fluid_volume",                "800.0",
+     "reservoir_capacity",          "1000.0", 
+     "temperature",                 TEMPERATURE, 
+     "battery",                     BATTERY
+);
     
     loop_interval = atoi(adapt(ad.sock_fd, "loop_interval"));
     ESP_LOGI(TAG, "Loop interval: %d", loop_interval);
 }
-
-
-
-/*---NVS HANDLING---*/
-// void read_nvs (nvs_handle_t handle, const char *key, void *value, size_t size, nvs_type_t type) {
-//     esp_err_t err;
-//     switch (type) {
-//         case NVS_TYPE_STR:
-//             err = nvs_get_str(handle, key, (const char*)value, &size);
-//             break;
-//         case NVS_TYPE_U32:
-//             err = nvs_get_u32(handle, key, *(uint32_t*)value);
-//             break;
-//         case NVS_TYPE_U8:
-//             err = nvs_get_u8(handle, key, *(uint8_t*)value);
-//             break;
-//         default:
-//             break;
-//             return;
-//     }
-
-//     switch (err) {
-//         case ESP_OK:
-//             ESP_LOGI(TAG, "Restart = %s\n", (char*)value);
-//             break;
-//         case ESP_ERR_NVS_NOT_FOUND:
-//             ESP_LOGI(TAG, "cpu_time_used is not initialized yet!\n");
-//             break;
-//         default :
-//             ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
-    
-//     }
-// }
-
-// void save_nvs (nvs_handle_t handle, const char* key, const void* value, nvs_type_t type) {
-//     esp_err_t err;
-//     switch (type) {
-//         case NVS_TYPE_STR:
-//             err = nvs_set_str(handle, key, (const char*)value);
-//             break;
-//         case NVS_TYPE_U32:
-//             err = nvs_set_u32(handle, key, *(uint32_t*)value);
-//             break;
-//         case NVS_TYPE_U8:
-//             err = nvs_set_u8(handle, key, *(uint8_t*)value);
-//             break;
-//         default:
-//             break;
-//             ESP_LOGI(TAG, "Invalid");
-//             return;
-//     }
-
-
-// }
-
-// void commit_nvs(nvs_handle_t handle) {
-//     esp_err_t err = nvs_commit(handle);
-
-//     if (err != ESP_OK) {
-//         ESP_LOGI(TAG, "Error (%s) committing!\n", esp_err_to_name(err));
-//     } else {
-//         ESP_LOGI(TAG, "Changes committed\n");
-//     }
-// }
-
-/*End NVS*/
-
-
 
 
 
@@ -315,7 +239,7 @@ void app_main()
                 ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
         } 
 
-        err = nvs_get_u32(nvs_handle, "i_c", &interval_counter);
+        err = nvs_get_u8(nvs_handle, "i_c", &interval_counter);
 
         switch (err) {
             case ESP_OK:
@@ -382,10 +306,10 @@ void app_main()
 
 
     if (interval_counter >= 60) {
-        err = nvs_set_u32(nvs_handle, "i_c", loop_interval);
+        err = nvs_get_u8(nvs_handle, "i_c", &loop_interval);
     } else {
         interval_counter += loop_interval;
-        err = nvs_set_u32(nvs_handle, "i_c", interval_counter);
+        err = nvs_get_u8(nvs_handle, "i_c", &interval_counter);
     }
 
     if (err != ESP_OK) {

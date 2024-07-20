@@ -5,6 +5,7 @@
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
 #include <lwip/err.h>
+#include "constants.h"
 
 
 struct adapter {

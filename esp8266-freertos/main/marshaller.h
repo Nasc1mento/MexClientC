@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "constants.h"
 #include "marshaller.h"
 
 
@@ -13,9 +14,9 @@
 #define LITERAL_STRING_SIZE     32
 #define SIZE_STR                11
 
-#define THING_ID                1
 
-char *marshaller(const char *operation, const char *topics, const char *message);
+
+char *marshaller(const char *operation, const char *topics, const char *message, char *payload, size_t size);
 void unmarshaller(const char *operation, const char *topics, char *buffer);
 
 #endif // MARSHALLER_H

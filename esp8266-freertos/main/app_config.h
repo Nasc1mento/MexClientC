@@ -13,15 +13,20 @@ struct parameters {
 
 
 
+#define BATTERY                         "100"
+#define TEMPERATURE                     "30"
+
+
+
 #define RECTANGLE                       1 
 #define CILINDER                        0    
 
 #define DEEP_HEIGHT                     100 // [cm]
 
 // #define RECTANGLE_HEIGHT   1
-#define RECTANGLE_HEIGHT                50
-#define RECTANGLE_WIDTH                 20
-#define RECTANGLE_LENGTH                20
+#define RECTANGLE_HEIGHT                20
+#define RECTANGLE_WIDTH                 10
+#define RECTANGLE_LENGTH                10
 
 // #define CILINDER DIAMETER               1
 #define CYLINDER_RADIUS                 100

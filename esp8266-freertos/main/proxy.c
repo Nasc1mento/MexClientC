@@ -12,17 +12,19 @@ struct mex_client create_connection(char *broker_ip, unsigned short int broker_p
 
 uint8_t publish(const struct mex_client *mc, const char *topics, const char *message) {
     char operation[OPERATION_SIZE] = "Publish";
-    char *payload = marshaller(operation, topics, message);
+    size_t buffer_size = strlen(topics) + strlen(message) + strlen(THING_ID) + OPERATION_SIZE + LITERAL_STRING_SIZE;
+    char payload[buffer_size];
+    marshaller(operation, topics, message, payload, buffer_size);
     uint8_t ret =  mex_send(mc->sock_fd, payload, strlen(payload));
-    free(payload);
     return ret;
 }
 
 uint8_t subscribe(const struct mex_client *mc, const char *topics) {
     char operation[OPERATION_SIZE] = "Subscribe";
-    char* payload = marshaller(operation, topics, "");
+    size_t buffer_size = strlen(topics) + strlen(THING_ID) + OPERATION_SIZE + LITERAL_STRING_SIZE;
+    char payload[buffer_size];
+    marshaller(operation, topics, "", payload, buffer_size);
     uint8_t ret = mex_send(mc->sock_fd, payload, strlen(payload));
-    free(payload);
     return ret;
 }
 
