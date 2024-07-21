@@ -15,8 +15,7 @@ uint8_t publish(const struct mex_client *mc, const char *topics, const char *mes
     size_t buffer_size = strlen(topics) + strlen(message) + strlen(THING_ID) + OPERATION_SIZE + LITERAL_STRING_SIZE;
     char payload[buffer_size];
     marshaller(operation, topics, message, payload, buffer_size);
-    uint8_t ret =  mex_send(mc->sock_fd, payload, strlen(payload));
-    return ret;
+    return mex_send(mc->sock_fd, payload, strlen(payload));
 }
 
 uint8_t subscribe(const struct mex_client *mc, const char *topics) {
@@ -24,10 +23,14 @@ uint8_t subscribe(const struct mex_client *mc, const char *topics) {
     size_t buffer_size = strlen(topics) + strlen(THING_ID) + OPERATION_SIZE + LITERAL_STRING_SIZE;
     char payload[buffer_size];
     marshaller(operation, topics, "", payload, buffer_size);
-    uint8_t ret = mex_send(mc->sock_fd, payload, strlen(payload));
-    return ret;
+    return mex_send(mc->sock_fd, payload, strlen(payload));
 }
 
-uint8_t check_msg(const struct mex_client *mc, char *buffer) {
-    return mex_recv(mc->sock_fd, buffer, BUFFER_SIZE);
+uint8_t check_msg(const struct mex_client *mc, const char *topics, char * buffer, size_t len) {
+    char operation[OPERATION_SIZE] = "CheckMsg";
+    size_t buffer_size = strlen(topics) + strlen(THING_ID) + OPERATION_SIZE + LITERAL_STRING_SIZE;
+    char payload[buffer_size];
+    marshaller(operation, topics, "", payload, buffer_size);
+    uint8_t ret = mex_send(mc->sock_fd, payload, strlen(payload));
+    return mex_recv(mc->sock_fd, buffer, len);
 }

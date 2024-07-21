@@ -10,8 +10,8 @@
 #define NOT_CONNECTED       1
 
 enum v_return {
-    MEX_ERR = -1,
-    MEX_OK = 0,
+    MEX_ERR =               -1,
+    MEX_OK =                 0,
             CONN_ERR,
             SEND_ERROR,
             RECV_ERROR,

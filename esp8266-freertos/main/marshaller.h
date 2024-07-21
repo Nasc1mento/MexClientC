@@ -16,7 +16,7 @@
 
 
 
-char *marshaller(const char *operation, const char *topics, const char *message, char *payload, size_t size);
-void unmarshaller(const char *operation, const char *topics, char *buffer);
+uint8_t marshaller(const char *operation, const char *topics, const char *message, char *payload, size_t size);
+void unmarshaller(const char *operation, const char *topics, char *buffer, const size_t len);
 
 #endif // MARSHALLER_H

@@ -19,42 +19,50 @@
 #include <nvs.h>
 #include <nvs_flash.h>
 #include <time.h>
+#include "constants.h"
+#include "app_config.h"
 #include "app_config.h"
 #include "power_save.h"
-#include "constants.h"
 
 
 #include "mex.h"
 
-#define ADAPT
+#define NVS_CLEAR
+// #define ADAPT
 // #define MQTT
 
 #ifdef MQTT
     #include "mqtt_client.h"
 #endif
 
+#define ADAPT
 
 #define RANDOM
 #define POWER_SAVE
 
-#define WIFI_CONNECTED_BIT                  BIT0
-#define WIFI_FAIL_BIT                       BIT1
+#define APP_WIFI_SSID      CONFIG_WIFI_SSID
+#define APP_WIFI_PASS      CONFIG_WIFI_PASSWORD
+#define APP_MAXIMUM_RETRY  CONFIG_MAXIMUM_RETRY
+
+#define APP_BROKER_HOST    CONFIG_BROKER_HOST
+#define APP_BROKER_PORT    CONFIG_BROKER_PORT
+
+#define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT      BIT1
 
 static EventGroupHandle_t xEventBits;
-static struct mex_client mc;
+struct mex_client mc;
 
-static const char *TAG =                    "application using mex";
+static const char *TAG = "application using mex";
 
-static int s_retry_num =                    0;
+static int s_retry_num = 0;
+
+char cpu_time_used_str[20];
 
 //duty cicle
-static uint8_t loop_interval =              30;
-static uint8_t interval_counter =           0;
-static char cpu_time_used_str[20];
+unsigned int loop_interval = 30;
 
-
-static struct parameters param;
-
+unsigned int interval_counter = 0;
 
 /*-----------WIFI----------------*/
 static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_id, void* event_data)
@@ -62,7 +70,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,int32_t event_i
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < MAXIMUM_RETRY) {
+        if (s_retry_num < APP_MAXIMUM_RETRY) {
             esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "retry to connect to the AP");
@@ -94,8 +102,8 @@ void wifi_init_sta()
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = WIFI_SSID,
-            .password = WIFI_PASS
+            .ssid = APP_WIFI_SSID,
+            .password = APP_WIFI_PASS
         },
     };
 
@@ -117,10 +125,10 @@ void wifi_init_sta()
             portMAX_DELAY);
 
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "connected to ap SSID:%s password:%s", WIFI_SSID, WIFI_PASS);
+        ESP_LOGI(TAG, "connected to ap SSID:%s password:%s", APP_WIFI_SSID, APP_WIFI_PASS);
                  
     } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s", WIFI_SSID, WIFI_PASS);
+        ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s", APP_WIFI_SSID, APP_WIFI_PASS);
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
@@ -134,22 +142,26 @@ void wifi_init_sta()
 
 /*------------------APPLICATION----------------------*/
 
+uint8_t read_distance() {
+
+    uint8_t seed = 0;
+
+    if (seed == 0) {
+        seed = esp_random();
+        srand(seed);
+    }
+
+    return rand() % 21;
+}
+
+
 void mex_task() {
 
-    char topic[] = "water-level";
-    const char msg_template[] = "{'distance': %d, 'battery': %s, 'timer': '%s'}";
-    char msg[sizeof(msg_template) + sizeof(cpu_time_used_str)];
+    char msg[sizeof(PUBLISH_TEMPLATE) + 50];
+    
+    uint8_t distance_read = read_distance();
 
-    int seed = esp_random();
-    srand(seed);
-
-
-    int distance_read = rand() % 21;
-
-    param.reservoir_capacity = RECTANGLE_WIDTH * RECTANGLE_LENGTH * RECTANGLE_HEIGHT;
-    param.fluid_volume = RECTANGLE_WIDTH * RECTANGLE_LENGTH * distance_read;
-
-    sprintf(msg, msg_template, distance_read, BATTERY, cpu_time_used_str);
+    sprintf(msg, PUBLISH_TEMPLATE, distance_read, BATTERY, cpu_time_used_str);
 
 #ifdef MQTT
 
@@ -163,7 +175,7 @@ void mex_task() {
     client = esp_mqtt_client_init(&mqtt_cfg);
     esp_mqtt_client_start(client);
 
-    esp_mqtt_client_publish(client, topic, msg, 0, 1, 0);
+    esp_mqtt_client_publish(client, TOPIC, msg, 0, 1, 0);
 
 #else
 
@@ -176,9 +188,9 @@ void mex_task() {
         return;
     }
 
-    publish(&mc, topic, msg);
+    publish(&mc, TOPIC, msg);
     
-    ESP_LOGI(TAG, "Message sent: %s to topic: %s", msg, topic);
+    ESP_LOGI(TAG, "Message sent: %s to topic: %s", msg, TOPIC);
 
 #endif
 }
@@ -187,24 +199,22 @@ void adaptation() {
     ESP_LOGI(TAG, "Adaptation is running");
     struct adapter ad = adapter_init(ADAPTER_HOST, ADAPTER_PORT);
 
-    param.battery = 100;
-    param.temperature = 30;
-
-    submit_data(&ad, 4,
-     "fluid_volume",                "800.0",
-     "reservoir_capacity",          "1000.0", 
-     "temperature",                 TEMPERATURE, 
-     "battery",                     BATTERY
-);
+    char plan[sizeof(ADAPTER_TEMPLATE)+50];
+    sprintf(plan, ADAPTER_TEMPLATE, FLUID_VOLUME(read_distance()), RESERVOIR_CAPACITY(), TEMPERATURE, BATTERY);
+    ESP_LOGI(TAG, "Plan: %s", plan);
+    submit_data(&ad, plan);
     
-    loop_interval = atoi(adapt(ad.sock_fd, "loop_interval"));
+    char value[10];
+    adapt(ad.sock_fd, "loop_interval", value, sizeof(value));
+    loop_interval = atoi(value);
+
     ESP_LOGI(TAG, "Loop interval: %d", loop_interval);
 }
 
 
-
 void app_main()
 {
+    
     /*---START TIMER---*/
     int64_t start = esp_timer_get_time();
     int64_t end;
@@ -239,7 +249,7 @@ void app_main()
                 ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
         } 
 
-        err = nvs_get_u8(nvs_handle, "i_c", &interval_counter);
+        err = nvs_get_u32(nvs_handle, "ic", &interval_counter);
 
         switch (err) {
             case ESP_OK:
@@ -252,7 +262,7 @@ void app_main()
                 ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
         }
 
-        err = nvs_get_u8(nvs_handle, "li", &loop_interval);
+        err = nvs_get_u8(nvs_handle, "ggg", &loop_interval);
 
         switch (err) {
             case ESP_OK:
@@ -306,10 +316,10 @@ void app_main()
 
 
     if (interval_counter >= 60) {
-        err = nvs_get_u8(nvs_handle, "i_c", &loop_interval);
+        err = nvs_set_u32(nvs_handle, "ic", loop_interval);
     } else {
         interval_counter += loop_interval;
-        err = nvs_get_u8(nvs_handle, "i_c", &interval_counter);
+        err = nvs_set_u32(nvs_handle, "ic", interval_counter);
     }
 
     if (err != ESP_OK) {
@@ -326,7 +336,7 @@ void app_main()
         ESP_LOGI(TAG, "Changes committed\n");
     }
 
-    err = nvs_set_u8(nvs_handle, "li", loop_interval);
+    err = nvs_set_u8(nvs_handle, "ggg", loop_interval);
 
     if (err != ESP_OK) {
         ESP_LOGI(TAG, "Error (%s) writing!\n", esp_err_to_name(err));
@@ -344,7 +354,9 @@ void app_main()
 
     nvs_close(nvs_handle);
 
-    #ifdef POWER_SAVE
-        deep_sleep(loop_interval);
-    #endif
+#ifdef POWER_SAVE
+    ESP_LOGI(TAG, "A mimir");
+    ESP_LOGI(TAG, "rrrrrrrrrrrraa: %d",loop_interval);
+    deep_sleep(loop_interval);
+#endif
 } 
