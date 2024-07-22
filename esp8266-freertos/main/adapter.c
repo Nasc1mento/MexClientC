@@ -32,8 +32,6 @@ uint8_t submit_data(const struct adapter *ad, const char* plan) {
     if (b <= 0) {
         return -1;
     }
-    //{'fluid_volume': 3000, 'reservoir_capacity': 10000, 'temperature': 30, 'battery': 100}
-    //// b'ADAPT\nThing:1-new-adryan\nfluid_volume:800.0\nreservoir_capacity:1000.0\ntemperature:30\nbattery:100'
 
     return send(ad->sock_fd, buffer, strlen(buffer), 0) == strlen(buffer) ? 0 : 1;
 }
@@ -57,8 +55,9 @@ uint8_t adapt(uint8_t sock_fd, char *param, char *value, const size_t value_size
             result++;
             strncpy(value, result, value_size - 1);
             value[value_size - 1] = '\0';
+            return 0;
         }
     }
-
-    return 0;
+    
+    return -1;
 }

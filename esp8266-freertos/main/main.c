@@ -51,7 +51,6 @@
 #define WIFI_FAIL_BIT      BIT1
 
 static EventGroupHandle_t xEventBits;
-struct mex_client mc;
 
 static const char *TAG = "application using mex";
 
@@ -155,7 +154,25 @@ uint8_t read_distance() {
 }
 
 
-void mex_task() {
+void subscriber() {
+    const struct mex_client mc = create_connection(BROKER_HOST, BROKER_PORT);
+
+    if (mc.st == CONNECTED) {
+        ESP_LOGI(TAG, "Connected to broker");
+    } else {
+        ESP_LOGI(TAG, "Failed to connect to broker");
+        return;
+    }
+
+    char buffer[128];
+    subscribe(&mc, TOPIC);
+    check_msg(&mc, TOPIC, buffer, sizeof(buffer));
+
+    ESP_LOGI(TAG, "Message received: %s", buffer);
+
+}
+
+void publisher() {
 
     char msg[sizeof(PUBLISH_TEMPLATE) + 50];
     
@@ -179,7 +196,7 @@ void mex_task() {
 
 #else
 
-    mc = create_connection(BROKER_HOST, BROKER_PORT);
+    const struct mex_client mc = create_connection(BROKER_HOST, BROKER_PORT);
 
     if (mc.st == CONNECTED) {
         ESP_LOGI(TAG, "Connected to broker");
@@ -216,8 +233,7 @@ void app_main()
 {
     
     /*---START TIMER---*/
-    int64_t start = esp_timer_get_time();
-    int64_t end;
+    int64_t timer = esp_timer_get_time();
     esp_err_t err = nvs_flash_init();
 
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -262,7 +278,7 @@ void app_main()
                 ESP_LOGI(TAG, "Error (%s) reading!\n", esp_err_to_name(err));
         }
 
-        err = nvs_get_u8(nvs_handle, "ggg", &loop_interval);
+        err = nvs_get_u8(nvs_handle, "loi", &loop_interval);
 
         switch (err) {
             case ESP_OK:
@@ -279,7 +295,7 @@ void app_main()
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
 
-    mex_task();
+    publisher();
 
 #ifdef ADAPT
     ESP_LOGI(TAG, "loop_interval: %d", loop_interval);
@@ -293,9 +309,9 @@ void app_main()
     }
 #endif // ADAPTATION
 
-    end = esp_timer_get_time();
+    timer = esp_timer_get_time() - timer;
     
-    sprintf(cpu_time_used_str, "%" PRId32 "%" PRId32, (int) ((end - start) >> 32), (int)((end - start) /1000));
+    sprintf(cpu_time_used_str, "%" PRId32 "%" PRId32, (int) ((timer) >> 32), (int)((timer) /1000));
 
     /*---SAVE TIMER TO NVS---*/
     err = nvs_set_str(nvs_handle, "ctu", cpu_time_used_str);
@@ -336,7 +352,7 @@ void app_main()
         ESP_LOGI(TAG, "Changes committed\n");
     }
 
-    err = nvs_set_u8(nvs_handle, "ggg", loop_interval);
+    err = nvs_set_u8(nvs_handle, "loi", loop_interval);
 
     if (err != ESP_OK) {
         ESP_LOGI(TAG, "Error (%s) writing!\n", esp_err_to_name(err));
@@ -356,7 +372,7 @@ void app_main()
 
 #ifdef POWER_SAVE
     ESP_LOGI(TAG, "A mimir");
-    ESP_LOGI(TAG, "rrrrrrrrrrrraa: %d",loop_interval);
+    ESP_LOGI(TAG, "Current Loop Interval: %d",loop_interval);
     deep_sleep(loop_interval);
 #endif
 } 
